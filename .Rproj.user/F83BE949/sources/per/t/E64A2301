@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1572629521885.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1890884013",
+    "id" : "E64A2301",
+    "lastKnownWriteTime" : 1574455776,
+    "last_content_update" : 1574455776613,
+    "path" : "~/R/espectros/R/espectros.R",
+    "project_path" : "R/espectros.R",
+    "properties" : {
+        "cursorPosition" : "133,31",
+        "scrollLine" : "115",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

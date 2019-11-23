@@ -1,0 +1,255 @@
+
+# Exploratory Data Analysis (EDA)
+
+## Introduction
+
+#La idea escencialmente es que le puedan: 
+#1. Hacer preguntas a tus datos
+#2. Buscar respuestas usando herramientas de visualizacion, transformacion y modelado 
+#3. Ir refinando el entendimiento de los datos para poder hacer nuevas preguntas
+
+
+### Prerequisitos
+
+#La idea es mas que nada usar las herramientas basicas de R base, `ggplot2` como herramienta grafica y algunas herramientas de data handling de `tidyverse`
+
+library(tidyverse)
+ 
+
+#Vamos a usar __dataset__ que R tiene precargados __mpg__, __diamonds__ , __iris__.
+
+#Hacerle preguntas a los datos que tenemos es un proceso creativo, y las preguntas que le vayamos haciendo va a depender de cada uno. Pero una buena manera de empezar es preguntarse 
+
+
+#1. ¿Qué tipo de variación ocurre dentro de mis variables?
+ 
+#2. ¿Qué tipo de covariación ocurre entre mis variables?
+  
+#Para trabajar alrededor de estas preguntas vale la pena aclarar algunos conceptos.
+
+#* Una __variable__ es una cantidad, calidad o propiedad que puede medir.
+
+#* Un __valor__ es el estado de una variable. El valor de una variable puede cambiar de medicion en medición
+
+#* Una __observación__ es un conjunto de mediciones realizadas en condiciones similares. 
+
+#* Una __observación__ va a contener varios __valores__ asociados uno por cada __variable__
+
+# Variación
+
+#La **Variación** en nuestros datos es lo que va a moldear las respuestas a las preguntas que nosotros le hagamos. Podemos decir la **Variación** es la tendencia de los __valores__ de una __variable__ a cambiar de medicion en medición.
+
+#Cada __variable__ va a tender su patron de variación, es un poco eso lo que vamos a tratar de encontrar. La mejor manera de encontrar ese patron es visualizar la distribucion de los valores de las __variables__. 
+
+## Explorando la tabla
+
+#Para los primeros ejemplos vamos a usar __diamonds__, una buena costumbre es ver los datos. `head()` imprime en encabezado, Es util para ver que pinta tienen los datos.
+ 
+head(diamonds)
+ 
+
+#Usar `summary()` nos va a dar un resumen y nos sirve para ver las variables continuas y categoricas que tenemos en nuestro __dataset__.
+
+ 
+summary(diamonds)
+ 
+
+
+### Visualizando distribuciones
+
+#Para visualizar la distribución de una variable dependerá de si la variable es categórica o continua. 
+
+#Variable categórica
+
+#Para examinar la distribución de una variable categórica, podemos usar un grafico de barras:
+  
+   
+ggplot(data = diamonds) +
+  geom_bar(mapping = aes(x = cut))
+ 
+
+#En este grafico vemos que la altura de las barras nos muestran cuantas observaciones se encontraron de esta __variable__ categórica.
+
+#Podemos observar los valores de cada uno usando `dplyr::count()`
+
+ 
+diamonds %>% 
+  count(cut)
+ 
+
+## Variable continua
+
+#Las __variables__ **continuas** son las que pueden tomar cualquier valor de un conjunto infinito. Estos datos en el `summary()` son los que tienen estadisticos.
+#Es decir numeros, tiempos , etc.
+
+#Para examinar las variables continuas se puede usar histogramas:
+  
+   
+ggplot(data = diamonds) +
+  geom_histogram(mapping = aes(x = carat), binwidth = 0.5)
+ 
+
+#Podemos observar los valores de cada uno usando`dplyr::count()` y `ggplot2::cut_width()`:
+  
+   
+diamonds %>% 
+  count(cut_width(carat, 0.5))
+ 
+
+#Un histograma divide el eje x en "bins" equiespaciados y luego usa la altura de una barra para mostrar el número de observaciones que caen en cada "bin".
+
+#El grafico anterior nos mostraba en una tendencia general la distribucion y dispersion de los datos.
+
+#Reduciendo el tamaño del "bin" podemos explorar una parte de los datos con mayor profundidad.
+
+ 
+smaller <- diamonds %>% 
+  filter(carat < 3)
+
+ggplot(data = smaller, mapping = aes(x = carat)) +
+  geom_histogram(binwidth = 0.1)
+ 
+
+#Los datos son los mismos pero con mas "zoom" y cuando pedimos los datos generados con el nuevo tamaño de "bin" van a ser distintos.
+ 
+smaller %>% 
+  count(cut_width(carat, 0.1))
+ 
+
+
+
+#Usando `geom_freqpoly ()` en lugar de `geom_histogram ()` podemos superponer varios histogramas.
+
+#`geom_freqpoly ()` realiza el mismo cálculo que `geom_histogram ()`, pero en lugar de mostrar los recuentos con barras, usa líneas en su lugar. 
+
+#Es mucho más fácil entender las líneas superpuestas que las barras, en este caso vamos a usar una variable categorica para ver si la distribucion que vimos antes tiene alguna relación.
+
+ 
+ggplot(data = smaller, mapping = aes(x = carat, colour = cut)) +
+  geom_freqpoly(binwidth = 0.1)
+ 
+
+#Vemos que hay alguna relacion en este caso entre el corte y los kilates
+
+# Covariación
+
+#La covarianza es la tendencia de los valores de dos o más variables a variar juntas de una manera relacionada. 
+
+#La mejor manera de detectar la covarianza es visualizar la relación entre dos o más variables.
+
+#Podemos utilizar diferentes herramientes dependiendo de los tipos de variables 
+
+## Variable categorica y variable continua
+
+#Ahora vamos a usar `mpg`, nueva tabla nueva exploración.
+
+ 
+head(mpg)
+ 
+summary(mpg)
+ 
+
+#Una buena manera (y muy popular) de ver si hay una covariación entre una variable continua y una categorica es el __boxplot__
+
+#Con estos datos de autos, ver si la autonomi (mpg) y la clase de auto (class), suena a una buena pregunta.
+
+ 
+ggplot(data = mpg, mapping = aes(x = class, y = hwy)) +
+  geom_boxplot()
+ 
+
+#Parece haber una covariación, podemos ordenar los datos por su mediana, por ejemplo para ver si se ve mas claramente. 
+
+
+ 
+ggplot(data = mpg) +
+  geom_boxplot(mapping = aes(x = reorder(class, hwy, FUN = median), y = hwy))
+ 
+## 2 Variables categoricas
+
+#Cuando tenemos 2 o mas variables categoricas nos vemos en principio obligados a trabajar con el numero de observaciones de cada una. 
+
+#Para eso y volviendo a __diamonds__ podemos usar `geom_count`. Podemos con esto comparar el corte (cut) y el color de los diamantes.  
+
+ 
+ggplot(data = diamonds) +
+  geom_count(mapping = aes(x = cut, y = color))
+ 
+
+#Si bien pareceria existir alguna tendencia, no es facil de ver. Principalmente porque con tantos objetos nos cuesta apreciar las diferencias.
+
+#Para poder observar las cuentas a las que corresponden estas correlaciones podemos usar `count()` 
+
+ 
+diamonds %>% 
+  count(color, cut)
+ 
+
+#Viendo los valores se pueden observar diferencias bastante fuertes, que no parecerian apreciarse en el grafico anterior. 
+
+#Teniendo los datos numericos ahora podemos tratar de expresar mejor estas diferencias.
+
+#Usando la tabla que generamos podemos usar `geom_tile()` para ilustrar con colores lo que vimos antes con tamaños. 
+
+ 
+diamonds %>% 
+  count(color, cut) %>%  
+  ggplot(mapping = aes(x = cut, y = color)) +
+  geom_tile(mapping = aes(fill = n))
+ 
+
+#Es interesante si comparamos los ultimos 2 graficos ver que la informacion es la misma pero parece ser mas clara la diferencia con colores.
+
+
+## 2 Variable continuas
+
+#Ahora vamos a usar `iris`, nueva tabla es decir, nueva exploración.
+
+ 
+head(iris)
+ 
+
+summary(iris)
+ 
+
+#En este caso tenemos 4 variables continuas y una categorica.
+
+#Un buen grafico exploratorio para 2 variables continuas es un grafico de dispersión. Con `geom_point()`.
+
+#En este caso exploraremos si exite una correlación entre el largo del petalo y el ancho del sepalo.
+
+ 
+ggplot(iris, aes(Petal.Length, Sepal.Width )) +
+  geom_point()
+ 
+
+#En este caso vemos la dispersion de los datos y que a priori habria cierta correlacion.
+
+#Como ya les mostro Nico, con geom_smooth() podemos trazar un ajuste automatico de yapa.
+
+ 
+ggplot(iris, aes(Petal.Length, Sepal.Width)) +
+  geom_point()+geom_smooth(method = lm, aes())
+ 
+
+#Ahora, Se ve que R logra generar una correlación. Peeero algo en la distribucion de estos datos que aunque sea un poco nos llama la atención.
+
+#Una manera de continuar con el analisis podemos agregarle la variable categorica al analisis.
+
+ 
+ggplot(iris, aes(Petal.Length, Sepal.Width, color=Species)) +
+  geom_point()
+ 
+
+#Esto ya nos muestra otro panorama. Que en este caso la distribucion misma de los datos nos llamo la atencion e hizo que siguieramos indagando.
+
+#Si agragamos las tendencias especificas a cada especie.
+
+ 
+ggplot(iris, aes(Petal.Length, Sepal.Width, color=Species)) +
+  geom_point()+geom_smooth(method = lm, aes(fill=Species))
+ 
+
+#Vemos que las tendencias individuales de cada especie son diferentes. 
+
+#Este es un ejemplo clasico del cuidado que tenemos que tener al explorar los datos. 

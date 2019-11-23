@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1574356212962.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3466932575",
+    "id" : "E1C19C15",
+    "lastKnownWriteTime" : 1572484483,
+    "last_content_update" : 1572484483,
+    "path" : "~/R/Ejercicios test de hipótesis/ejercicioclase3.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "39,64",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
