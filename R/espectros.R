@@ -79,7 +79,8 @@ p4
 
 grid.arrange(p1,p2,p3,p4,ncol = 2, nrow = 2)#hay que graficar otra vez tras filtrar el espectro malo primero
 
-#CONCLUSIón: se ve que los espectros no son tan diferentes como uno quisiera, probablemente algunos problemas a futuro
+#CONCLUSIón: se ve que los espectros no son tan diferentes como uno quisiera, probablemente generará algunos problemas a futuro
+#¿quizás es necesario filtrar los espectros de otra forma?
 
 #en otros análisis me interesa tratar cada longitud de onda como una variable y que cada barrido sea un vector fila
 #calculo la correlación entre diferentes barridos, como cada barrido ocupa una fila tengo que transponer
@@ -126,7 +127,9 @@ scorRDTN <- datos.tidy %>% rownames_to_column('barrido') %>%
 
 pheatmap(scorRDTN)
 
-#PCA
+#CONCLUSIÓN: los heatmaps de correlaciones no dan tanta información como se esperaba
+
+#Análisis de componentes principales
 df_pca <- datos.tidy %>% select(-grupo,-archivo,-Nbarrido) %>% prcomp(scale. = T) #la normalización no me permite escalar
 df_out <- as.data.frame(df_pca$x)
 labels <- datos.tidy %>% select(grupo,archivo,Nbarrido) %>% rownames_to_column('barrido') 
@@ -136,8 +139,9 @@ df_out <- df_out %>% rownames_to_column('barrido') %>%
 screeplot(df_pca)#las primeras dos componentes son suficientes
 
 ggplot(df_out,aes(x=PC1,y=PC2,color=grupo )) + geom_point() #+ xlim()
+#el PCA no parece generar un buen clustering, ¿será un problema con los datos o que la reducción dimensional no ayuda mucho?
 
-
+#esto es para observar si hay algún efecto sobre el número de barrido, pero no parece ser el caso
 ggplot(df_out,aes(x=PC1,y=PC2,color=Nbarrido )) + geom_point() #+ xlim()
 
 #Pregunta: ¿puedo explicar alguna de las diferencias entre los grupos mediante alguna PC?
@@ -155,7 +159,38 @@ aov_res <- aov(PC1 ~ grupo, data = df_out)
 summary (aov_res)#PC1 no es suficientemente bueno para dividir entre grupos
 TukeyHSD(aov_res)
 kruskal.test(PC2 ~ grupo, data = df_out)#aunque PC2 parece ser interesante
-pairwise.wilcox.test(df_out$PC2, df_out$grupo,p.adjust.method = "BH")#parece ser suficientemetne decente para distinguir entre PE y resto
+pairwise.wilcox.test(df_out$PC2, df_out$grupo,p.adjust.method = "BH")
+
+#CONCLUSIÓN: PC2 parece ser suficientemente decente para distinguir entre PE y resto, falla en separar otros pares
+
+#otra pregunta: ¿hay alguna longitud de onda significativa? Podríamos analizar los loadings del PCA para determinarlo
+#la idea es que si grafico loadings de PC1 vs. los de PC2 puedo observar longitudes de onda interesantes en aquellos lugares donde los puntos generados sean extremos
+df_loadings <- as.data.frame(df_pca$rotation)
+g <-df_loadings %>% 
+  ggplot(aes(x=PC1, y =PC2)) +
+  geom_point(alpha=0.4, size=1) + 
+  geom_text(aes(label=rownames(df_loadings),hjust=0,vjust=0,
+                alpha = ifelse(between(PC1,-0.026,0.11) & between(PC2,-0.09,0.18),0,1)))
+g #¡hacer zoom para que sea más cómodo!
+#resulta que las longitudes de onda que más agresivamente influyen en el PCA (y que puede que sean representativas) son 481.374,482.032 y 482.361 (corresponden a uno de los picos)
+#puede que el filtrado sea muy agresivo o que convenga utilizar otros métodos para elegir longitudes de onda
+#dicho eso, ahora puedo realizar ANOVAs o los equivalentes paramétricos
+shapiro.test(datos.tidy$`481.374`[datos.tidy$grupo == "PE"])
+shapiro.test(datos.tidy$`481.374`[datos.tidy$grupo == "Pu"])
+shapiro.test(datos.tidy$`481.374`[datos.tidy$grupo == "RD"])
+shapiro.test(datos.tidy$`481.374`[datos.tidy$grupo == "TN"])#este grupo no es normal
+shapiro.test(datos.tidy$`482.032`[datos.tidy$grupo == "PE"])#no es normal
+shapiro.test(datos.tidy$`482.032`[datos.tidy$grupo == "Pu"])
+shapiro.test(datos.tidy$`482.032`[datos.tidy$grupo == "RD"])
+shapiro.test(datos.tidy$`482.032`[datos.tidy$grupo == "TN"])#no es normal
+shapiro.test(datos.tidy$`482.361`[datos.tidy$grupo == "PE"])
+shapiro.test(datos.tidy$`482.361`[datos.tidy$grupo == "Pu"])
+shapiro.test(datos.tidy$`482.361`[datos.tidy$grupo == "RD"])
+shapiro.test(datos.tidy$`482.361`[datos.tidy$grupo == "TN"])#no es normal
+kruskal.test(`481.374` ~ grupo, data = datos.tidy)#no es significativo
+kruskal.test(`482.032` ~ grupo, data = datos.tidy)#no es significativo
+kruskal.test(`482.361` ~ grupo, data = datos.tidy)#no es significativo
+#pairwise.wilcox.test(datos.tidy$`481.374`, datos.tidy$grupo,p.adjust.method = "BH")
 
 #extracción de características útiles para el análisis espectral
 #recomendado por compañeros de trabajo
@@ -182,6 +217,7 @@ screeplot(featurepca)#las primeras dos componentes son suficientes
 
 ggplot(featureout,aes(x=PC1,y=PC2,color=grupo )) + geom_point() #+ xlim(-1.5,1.5)
 ggplot(featureout,aes(x=PC2,y=PC3,color=grupo )) + geom_point()
+#parece ser un poco mejor el clustering pero no es suficiente; ¿quizás otras características funcionarían mejor?
 
 #Analizo las PC
 shapiro.test(featureout$PC1[featureout$grupo == "PE"])
@@ -200,3 +236,6 @@ summary.aov(manova_res)#dividido por el número de test sólo es interesante PC2
 aov_res <- aov(PC2 ~ grupo, data = featureout)
 summary (aov_res)
 TukeyHSD(aov_res)#las únicas diferencias significativas las veo para comparar TN con el resto
+
+#CONCLUSIÓN: PC2 parece ser suficientemente decente para distinguir entre TN y resto, falla en separar otros pares
+
