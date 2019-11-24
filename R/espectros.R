@@ -1,8 +1,8 @@
-library(tidyverse)
 library(pheatmap)
 library(gplots)
 library(pracma)
 library(gridExtra)
+library(tidyverse)
 source("R/cargaarchivos.R")
 getwd()
 
@@ -25,7 +25,7 @@ datos.tidy <-  datos.muestras %>%
   gather(key = "Nbarrido", value = "Intensidad", Measure1, Measure2, Measure3,Measure4, Measure5, Measure6,Measure7, Measure8, Measure9,Measure10, Measure11) %>%
   mutate(barrido = str_c(archivo,"-B",str_remove(Nbarrido,"Measure"))) %>% 
   group_by(barrido) %>% 
-  filter(between(Wavelength,465,520)) %>% #longitudes de onda de interés, determinada por el químico que obtuvo los espectros
+  filter(between(Wavelength,465,520)) %>% #longitudes de onda de interés, determinada quien me suministró los espectros (¿será una buena elección?)
   mutate(
          val = interp1(Wavelength,Intensidad,481.8),#val es temporal
          Intensidad = Intensidad/val #normalización
@@ -34,8 +34,6 @@ datos.tidy <-  datos.muestras %>%
   select(-val) %>%
   #select(grupo,everything()) %>% #reordenando las variables para mayor comodidad
   #luego de eso remuevo los barridos que experimentalmente se consideraron de baja calidad
-  #filter(((archivo == "PE1" | archivo == "PE2") & (Nbarrido == "Measure3" | Nbarrido == "Measure4" | Nbarrido == "Measure5") ) | 
-  #         ((archivo != "PE1" & archivo != "PE2") & (Nbarrido == "Measure2" | Nbarrido == "Measure3" | Nbarrido == "Measure4")))
   filter((archivo %in% c("PE1", "PE2") & Nbarrido %in% c("Measure3", "Measure4", "Measure5")) | (!(archivo %in% c("PE1", "PE2")) & Nbarrido %in% c("Measure2", "Measure3", "Measure4")))
   
 #etiquetando para facilitar trabajo futuro
@@ -64,7 +62,9 @@ datos.gathered %>% filter(archivo == "Pu2") %>%
   ggplot(aes(x=Wavelength,y=Intensity,color= Nbarrido )) + 
   geom_line(aes(alpha = 0.1)) #el problema es específicamente con "Measure2"
 
-datos.tidy <- filter(datos.tidy,archivo != "Pu2" | Nbarrido != "Measure2") #así que lo remuevo
+datos.tidy <- datos.tidy%>% rownames_to_column('barrido') %>%
+  filter(archivo != "Pu2" | Nbarrido != "Measure2") %>% #así que lo remuevo
+  column_to_rownames('barrido')
 datos.gathered <- filter(datos.gathered,barrido != "Pu2-B2") 
 
 p3 <- datos.gathered %>% filter(grupo == "RD") %>%
@@ -78,7 +78,8 @@ p4 <- datos.gathered %>% filter(grupo == "TN") %>%
 p4
 
 grid.arrange(p1,p2,p3,p4,ncol = 2, nrow = 2)#hay que graficar otra vez tras filtrar el espectro malo primero
-#se ve que los espectros no son tan diferentes como uno quisiera
+
+#CONCLUSIón: se ve que los espectros no son tan diferentes como uno quisiera, probablemente algunos problemas a futuro
 
 #en otros análisis me interesa tratar cada longitud de onda como una variable y que cada barrido sea un vector fila
 #calculo la correlación entre diferentes barridos, como cada barrido ocupa una fila tengo que transponer
@@ -92,7 +93,7 @@ scorPEPu <- datos.tidy %>% rownames_to_column('barrido') %>%
   filter(grupo == "PE" | grupo == "Pu") %>% column_to_rownames('barrido') %>% 
   select_if(is.numeric) %>% t() %>% cor()
 
-pheatmap(scorPEPu)#Pu2-B2 parece ser de baja calidad
+pheatmap(scorPEPu)
 
 
 scorPERD <- datos.tidy %>% rownames_to_column('barrido') %>%
@@ -126,7 +127,7 @@ scorRDTN <- datos.tidy %>% rownames_to_column('barrido') %>%
 pheatmap(scorRDTN)
 
 #PCA
-df_pca <- datos.tidy %>% select(-grupo,-archivo,-Nbarrido) %>% prcomp(scale. = F) #la normalización no me permite escalar
+df_pca <- datos.tidy %>% select(-grupo,-archivo,-Nbarrido) %>% prcomp(scale. = T) #la normalización no me permite escalar
 df_out <- as.data.frame(df_pca$x)
 labels <- datos.tidy %>% select(grupo,archivo,Nbarrido) %>% rownames_to_column('barrido') 
 df_out <- df_out %>% rownames_to_column('barrido') %>% 
@@ -134,10 +135,27 @@ df_out <- df_out %>% rownames_to_column('barrido') %>%
 
 screeplot(df_pca)#las primeras dos componentes son suficientes
 
-ggplot(df_out,aes(x=PC1,y=PC2,color=grupo )) + geom_point() + xlim(-10.85,-10.6)
+ggplot(df_out,aes(x=PC1,y=PC2,color=grupo )) + geom_point() #+ xlim()
 
 
-ggplot(df_out,aes(x=PC1,y=PC2,color=Nbarrido )) + geom_point() + xlim(-10.85,-10.6)
+ggplot(df_out,aes(x=PC1,y=PC2,color=Nbarrido )) + geom_point() #+ xlim()
+
+#Pregunta: ¿puedo explicar alguna de las diferencias entre los grupos mediante alguna PC?
+#si bien es cierto que el gráfico indica que probablemente no, alguna conclusión podría obtenerse
+shapiro.test(df_out$PC1[df_out$grupo == "PE"])
+shapiro.test(df_out$PC2[df_out$grupo == "PE"])
+shapiro.test(df_out$PC1[df_out$grupo == "Pu"])
+shapiro.test(df_out$PC2[df_out$grupo == "Pu"])
+shapiro.test(df_out$PC1[df_out$grupo == "RD"])
+shapiro.test(df_out$PC2[df_out$grupo == "RD"])
+shapiro.test(df_out$PC1[df_out$grupo == "TN"])
+shapiro.test(df_out$PC2[df_out$grupo == "TN"])#PC1 normal, PC2 no
+bartlett.test(PC1~grupo,df_out)#varianzas homogéneas
+aov_res <- aov(PC1 ~ grupo, data = df_out)
+summary (aov_res)#PC1 no es suficientemente bueno para dividir entre grupos
+TukeyHSD(aov_res)
+kruskal.test(PC2 ~ grupo, data = df_out)#aunque PC2 parece ser interesante
+pairwise.wilcox.test(df_out$PC2, df_out$grupo,p.adjust.method = "BH")#parece ser suficientemetne decente para distinguir entre PE y resto
 
 #extracción de características útiles para el análisis espectral
 #recomendado por compañeros de trabajo
@@ -162,8 +180,23 @@ featureout <- featureout %>% rownames_to_column('barrido') %>%
 
 screeplot(featurepca)#las primeras dos componentes son suficientes
 
-ggplot(featureout,aes(x=PC1,y=PC2,color=grupo )) + geom_point() + xlim(-1.5,1.5)
+ggplot(featureout,aes(x=PC1,y=PC2,color=grupo )) + geom_point() #+ xlim(-1.5,1.5)
+ggplot(featureout,aes(x=PC2,y=PC3,color=grupo )) + geom_point()
 
-#featurevector no es muy amigable a tests estadísticos pero podría usar para machine learning (por ejemplo, utilizar lda en alguna etapa antes de clasificar)
-
-#hay una librería llamda chemospec que probablemente sea adecuada para este trabajo pero no llegué demasiado lejos con ella.
+#Analizo las PC
+shapiro.test(featureout$PC1[featureout$grupo == "PE"])
+shapiro.test(featureout$PC2[featureout$grupo == "PE"])
+shapiro.test(featureout$PC1[featureout$grupo == "Pu"])
+shapiro.test(featureout$PC2[featureout$grupo == "Pu"])
+shapiro.test(featureout$PC1[featureout$grupo == "RD"])
+shapiro.test(featureout$PC2[featureout$grupo == "RD"])
+shapiro.test(featureout$PC1[featureout$grupo == "TN"])
+shapiro.test(featureout$PC2[featureout$grupo == "TN"])#ambas normales
+bartlett.test(PC1~grupo,featureout)
+bartlett.test(PC2~grupo,featureout)#varianzas homogéneas
+manova_res <- manova(cbind(PC1,PC2) ~ grupo, data = featureout)
+summary(manova_res)
+summary.aov(manova_res)#dividido por el número de test sólo es interesante PC2
+aov_res <- aov(PC2 ~ grupo, data = featureout)
+summary (aov_res)
+TukeyHSD(aov_res)#las únicas diferencias significativas las veo para comparar TN con el resto
