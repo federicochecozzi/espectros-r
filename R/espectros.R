@@ -6,6 +6,9 @@ library(tidyverse)
 source("R/cargaarchivos.R")
 getwd()
 
+#IMPORTANTE: algunos de los valores seleccionados para el análisis de estos espectros fueron obtenidos del archivo explosivos.py,
+#fueron determinados por el que realizó las mediciones a su mejor juicio pero puede que se puedan mejorar
+
 .nombre.archivos <- dir(path = "data/", pattern = "[PRT]")
 .nombre.archivos
 datos.muestras <- cargar.muestras(.nombre.archivos, "data/")
@@ -23,20 +26,20 @@ datos.muestras <- datos.muestras %>%
 #las variables relevantes son las longitudes de onda, el número de medición/barrido es un identificador
 datos.tidy <-  datos.muestras %>% 
   gather(key = "Nbarrido", value = "Intensidad", Measure1, Measure2, Measure3,Measure4, Measure5, Measure6,Measure7, Measure8, Measure9,Measure10, Measure11) %>%
-  mutate(barrido = str_c(archivo,"-B",str_remove(Nbarrido,"Measure"))) %>% 
-  group_by(barrido) %>% 
-  filter(between(Wavelength,465,520)) %>% #longitudes de onda de interés, determinada quien me suministró los espectros (¿será una buena elección?)
+  mutate(barrido = str_c(archivo,"-B",str_remove(Nbarrido,"Measure"))) %>% #añado una etiqueta única para cada barrido espectral
+  group_by(barrido) %>% #las siguientes acciones son a nivel espectro
+  filter(between(Wavelength,465,520)) %>% #longitudes de onda de interés, determinados por quien me suministró los espectros (¿será una buena elección? Merece ser estudiado eventualmente)
   mutate(
-         val = interp1(Wavelength,Intensidad,481.8),#val es temporal
-         Intensidad = Intensidad/val #normalización
+         val = interp1(Wavelength,Intensidad,481.8),#val es temporal, interpolo para observar la intensidad en 481.8
+         Intensidad = Intensidad/val #normalización 
          ) %>% 
   spread(key = Wavelength, value = "Intensidad") %>%
   select(-val) %>%
-  #select(grupo,everything()) %>% #reordenando las variables para mayor comodidad
   #luego de eso remuevo los barridos que experimentalmente se consideraron de baja calidad
-  filter((archivo %in% c("PE1", "PE2") & Nbarrido %in% c("Measure3", "Measure4", "Measure5")) | (!(archivo %in% c("PE1", "PE2")) & Nbarrido %in% c("Measure2", "Measure3", "Measure4")))
+  filter((archivo %in% c("PE1", "PE2") & Nbarrido %in% c("Measure3", "Measure4", "Measure5")) |
+           (!(archivo %in% c("PE1", "PE2")) & Nbarrido %in% c("Measure2", "Measure3", "Measure4")))
   
-#etiquetando para facilitar trabajo futuro
+#convirtiendo barrido en etiquetas
 datos.tidy <- column_to_rownames(datos.tidy, 'barrido')
 
 #primero debería comparar espectros entre distintas señales para observar posibles anomalías
@@ -63,7 +66,7 @@ datos.gathered %>% filter(archivo == "Pu2") %>%
   geom_line(aes(alpha = 0.1)) #el problema es específicamente con "Measure2"
 
 datos.tidy <- datos.tidy%>% rownames_to_column('barrido') %>%
-  filter(archivo != "Pu2" | Nbarrido != "Measure2") %>% #así que lo remuevo
+  filter(archivo != "Pu2" | Nbarrido != "Measure2") %>% #así que conviene removerlo
   column_to_rownames('barrido')
 datos.gathered <- filter(datos.gathered,barrido != "Pu2-B2") 
 
@@ -79,12 +82,11 @@ p4
 
 grid.arrange(p1,p2,p3,p4,ncol = 2, nrow = 2)#hay que graficar otra vez tras filtrar el espectro malo primero
 
-#CONCLUSIón: se ve que los espectros no son tan diferentes como uno quisiera, probablemente generará algunos problemas a futuro
-#¿quizás es necesario filtrar los espectros de otra forma?
+#CONCLUSIón: se ve que los espectros no son tan diferentes como uno quisiera, las distribuciones no lucen muy diferentes, probablemente generará algunos problemas a futuro
 
 #en otros análisis me interesa tratar cada longitud de onda como una variable y que cada barrido sea un vector fila
 #calculo la correlación entre diferentes barridos, como cada barrido ocupa una fila tengo que transponer
-#nótese que la información en el tibble está ordenada por grupo y archivo ya
+
 scor <- datos.tidy %>% select_if(is.numeric) %>% t() %>% cor()
 
 pheatmap(scor) #heatmap de las correlaciones; demasiadas observaciones para ser cómodo
@@ -94,7 +96,7 @@ scorPEPu <- datos.tidy %>% rownames_to_column('barrido') %>%
   filter(grupo == "PE" | grupo == "Pu") %>% column_to_rownames('barrido') %>% 
   select_if(is.numeric) %>% t() %>% cor()
 
-pheatmap(scorPEPu)
+pheatmap(scorPEPu) 
 
 
 scorPERD <- datos.tidy %>% rownames_to_column('barrido') %>%
@@ -128,6 +130,7 @@ scorRDTN <- datos.tidy %>% rownames_to_column('barrido') %>%
 pheatmap(scorRDTN)
 
 #CONCLUSIÓN: los heatmaps de correlaciones no dan tanta información como se esperaba
+#las diferencias intragrupo o entre grupos no parecen tener un patrón
 
 #Análisis de componentes principales
 df_pca <- datos.tidy %>% select(-grupo,-archivo,-Nbarrido) %>% prcomp(scale. = T) #la normalización no me permite escalar
@@ -161,16 +164,20 @@ TukeyHSD(aov_res)
 kruskal.test(PC2 ~ grupo, data = df_out)#aunque PC2 parece ser interesante
 pairwise.wilcox.test(df_out$PC2, df_out$grupo,p.adjust.method = "BH")
 
-#CONCLUSIÓN: PC2 parece ser suficientemente decente para distinguir entre PE y resto, falla en separar otros pares
+#CONCLUSIÓN: PC2 parece ser capaz de distinguir entre PE y resto, falla en separar otros pares
 
 #otra pregunta: ¿hay alguna longitud de onda significativa? Podríamos analizar los loadings del PCA para determinarlo
 #la idea es que si grafico loadings de PC1 vs. los de PC2 puedo observar longitudes de onda interesantes en aquellos lugares donde los puntos generados sean extremos
 df_loadings <- as.data.frame(df_pca$rotation)
-g <-df_loadings %>% 
+g <-df_loadings %>%
   ggplot(aes(x=PC1, y =PC2)) +
   geom_point(alpha=0.4, size=1) + 
-  geom_text(aes(label=rownames(df_loadings),hjust=0,vjust=0,
-                alpha = ifelse(between(PC1,-0.026,0.11) & between(PC2,-0.09,0.18),0,1)))
+  geom_text_repel(
+                    data = filter(df_loadings %>% rownames_to_column('barrido'), 
+                                !between(PC1,-0.026,0.11) | !between(PC2,-0.09,0.18)), 
+                    aes(label=barrido,hjust=0,vjust=0)
+                  )
+
 g #¡hacer zoom para que sea más cómodo!
 #resulta que las longitudes de onda que más agresivamente influyen en el PCA (y que puede que sean representativas) son 481.374,482.032 y 482.361 (corresponden a uno de los picos)
 #puede que el filtrado sea muy agresivo o que convenga utilizar otros métodos para elegir longitudes de onda
@@ -197,10 +204,16 @@ kruskal.test(`482.361` ~ grupo, data = datos.tidy)#no es significativo
 #lo utilizo para obtener el índice de una longitud de onda dada
 featurevector <- datos.gathered %>% group_by(barrido) %>% 
   summarise(
-            integral471a474.5 = trapz(Wavelength[between(Wavelength,471,474.5)],Intensity[between(Wavelength,471,474.5)]),
-            integral488a497   = trapz(Wavelength[between(Wavelength,488,497  )],Intensity[between(Wavelength,488,497  )]),
-            integral498a506   = trapz(Wavelength[between(Wavelength,498,506  )],Intensity[between(Wavelength,498,506  )]),
-            integral509a515   = trapz(Wavelength[between(Wavelength,509,515  )],Intensity[between(Wavelength,509,515  )]),
+            #se calcula las integrales en los cuatro picos espectrales observados
+            integral471a474.5 = trapz(Wavelength[between(Wavelength,471,474.5)],
+                                      Intensity [between(Wavelength,471,474.5)]),
+            integral488a497   = trapz(Wavelength[between(Wavelength,488,497  )],
+                                      Intensity [between(Wavelength,488,497  )]),
+            integral498a506   = trapz(Wavelength[between(Wavelength,498,506  )],
+                                      Intensity [between(Wavelength,498,506  )]),
+            integral509a515   = trapz(Wavelength[between(Wavelength,509,515  )],
+                                      Intensity [between(Wavelength,509,515  )]),
+            #los valores en los picos observados se obtienen por interpolación
             pico472.6  = interp1(Wavelength,Intensity,472.6 ),
             pico492.99 = interp1(Wavelength,Intensity,492.99),
             pico500.7  = interp1(Wavelength,Intensity,500.7 ),
@@ -238,4 +251,9 @@ summary (aov_res)
 TukeyHSD(aov_res)#las únicas diferencias significativas las veo para comparar TN con el resto
 
 #CONCLUSIÓN: PC2 parece ser suficientemente decente para distinguir entre TN y resto, falla en separar otros pares
+
+#CONCLUSIÓN GENERAL: 
+#En análisis futuros convendría revisar el rango de longitudes elegidas durante el análisis,
+#mejorar métodos de limpieza de señal/eliminación de espectros malos,
+#y extraer mejores características que ayuden a discriminar más adecuadamente entre grupos
 
